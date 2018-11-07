@@ -8,15 +8,21 @@ import random
 import urllib.request
 import json
 import xml.etree.ElementTree as et
+import requests
+import unicodedata
 
 import spotipy
 import spotipy.util as util
 
-PLAYLIST = "Loved"
+PLAYLIST = "Synced Bands"
+BOT_ID = "REDACTED"
+USERNAME = "REDACTED"
+CLIENT_ID = "REDACTED"
+CLIENT_SECRET = "REDACTED"
+REDIRECT_URI = "REDACTED"
+IMAGE = "REDACTED"
 
-xml_path = (
-    os.environ["USERPROFILE"] + "/music/itunes/iTunes Music Library.xml"
-)
+xml_path = os.environ["USERPROFILE"] + "/music/itunes/iTunes Music Library.xml"
 
 tree = et.parse(xml_path)
 root = tree.getroot()
@@ -51,8 +57,17 @@ def find_path_to_playlist(playlist, path):
     return None
 
 
+def remove_accents(input_str):
+    """Found here: https://stackoverflow.com/a/517974."""
+    nfkd_form = unicodedata.normalize("NFKD", input_str)
+    only_ascii = nfkd_form.encode("ASCII", "ignore")
+    return only_ascii.decode("ASCII")
+
+
 def format_name(name):
-    return "".join(ch for ch in name if (ch.isalnum() or ch == " ")).lower()
+    return remove_accents(
+        "".join(ch for ch in name if (ch.isalnum() or ch == " ")).lower()
+    )
 
 
 playlists_path = find_path_to_playlist("Playlists", [0])
@@ -68,6 +83,7 @@ track_ids = [song[1].text for song in get_tree(path, True)]
 
 file_path = os.environ["USERPROFILE"] + "\\documents\\chosen_songs.txt"
 
+# Create file if does not already exist
 f = open(file_path, "a")
 f.close()
 
@@ -77,13 +93,10 @@ with open(file_path, "r") as f:
         if line:
             blacklisted.append(line)
 
-chosen_track = None
-attempts = 1000
-while isinstance(chosen_track, type(None)) or chosen_track in blacklisted:
-    chosen_track = track_ids[random.randint(0, len(track_ids) - 1)]
-    attempts -= 1
-    if attempts < 0:
-        raise Exception("Chosen all songs already")
+remaining_tracks = set(track_ids) - set(blacklisted)
+if not remaining_tracks:
+    raise Exception("No tracks remain")
+chosen_track = random.choice(tuple(remaining_tracks))
 
 with open(file_path, "a") as f:
     f.write(str(chosen_track) + "\n")
@@ -99,31 +112,26 @@ for i, track in enumerate(get_tree(path, True)):
         song = get_tree(path, True)
         break
 
-name = None
-artist = None
+original_name = None
+original_artist = None
 
 for i, key in enumerate(song):
     if key.text == "Name":
-        name = song[i + 1].text
+        original_name = song[i + 1].text
     if key.text == "Artist":
-        artist = song[i + 1].text
+        original_artist = song[i + 1].text
 
-name = format_name(name)
-artist = format_name(artist)
-
-print(chosen_track, name, artist)
+name = format_name(original_name)
+artist = format_name(original_artist)
 
 itunes_song_info = urllib.request.urlopen(
-    ('https://itunes.apple.com/search?term="' + name + '" ' + artist)
-    .replace(" ", "+")
-    .encode("ascii", "ignore")
-    .decode("ascii")
+    ('https://itunes.apple.com/search?term="' + name + '" ' + artist).replace(" ", "+")
 ).read()
 json_string_itunes = itunes_song_info.decode("utf8").replace("\n", "")
 json_itunes = json.loads(json_string_itunes)
 results = json_itunes["results"]
 
-itunes_link = None
+itunes_link = ""
 for track in results:
     if (
         format_name(track["trackName"]) == name
@@ -135,24 +143,17 @@ for track in results:
 if isinstance(itunes_link, type(None)):
     print("No itunes link found.")
 
-# spotify_song_info = urllib.request.urlopen(
-#     ("https://api.spotify.com/v1/search?q="+ name + " " + artist + "&type=artist,track").replace(" ", "%20")
-# ).read()
-
 token = util.prompt_for_user_token(
-    username="REDACTED",
-    client_id="REDACTED",
-    client_secret="REDACTED",
-    scope="user-library-read",
-    redirect_uri="REDACTED",
+    username=USERNAME,
+    client_id=CLIENT_ID,
+    client_secret=CLIENT_SECRET,
+    scope="user-library-read",  # Apparent I have to provide a scope even if my script requires no user acess ... i think
+    redirect_uri=REDIRECT_URI,  # Apparently I have to provide a url to verify against my account ... i think
 )
 spotify = spotipy.Spotify(token)
-results = spotify.search(
-    q=("track:" + name + " artist:" + artist).encode("ascii", "ignore").decode("ascii"),
-    type="track",
-)
+results = spotify.search(q=("track:" + name + " artist:" + artist), type="track")
 
-spotify_link = None
+spotify_link = ""
 
 try:
     results = results["tracks"]["items"]
@@ -169,7 +170,21 @@ try:
 except IndexError as e:
     print("No spotify link found.")
 
+print(original_name, original_artist)
+
 if not isinstance(spotify_link, type(None)):
     print(spotify_link)
 if not isinstance(itunes_link, type(None)):
     print(itunes_link)
+
+message = f"SONG OF THE DAY\n-------------------\n{original_artist}: {original_name}\n\nSpotify: {spotify_link}\nApple: {itunes_link}"
+
+post_params = {"bot_id": BOT_ID, "text": IMAGE}
+requests.post("https://api.groupme.com/v3/bots/post", params=post_params)
+
+post_params = {
+    "bot_id": BOT_ID,
+    "text": message,
+    # "attachments": [{"type": "image", "url": IMAGE}],
+}
+requests.post("https://api.groupme.com/v3/bots/post", params=post_params)
