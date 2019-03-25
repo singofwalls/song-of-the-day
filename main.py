@@ -104,32 +104,7 @@ def main():
     if isinstance(itunes_link, type(None)):
         print("No itunes link found.")
 
-    token = util.prompt_for_user_token(
-        username=USERNAME,
-        client_id=CLIENT_ID,
-        client_secret=CLIENT_SECRET,
-        scope="user-library-read",  # Apparent I have to provide a scope even if my script requires no user acess ... i think
-        redirect_uri=REDIRECT_URI,  # Apparently I have to provide a url to verify against my account ... i think
-    )
-    spotify = spotipy.Spotify(token)
-    results = spotify.search(q=("track:" + name + " artist:" + artist), type="track")
-
-    spotify_link = ""
-
-    try:
-        results = results["tracks"]["items"]
-        for track in results:
-            if format_name(track["name"]) == name and artist in [
-                format_name(a["name"]) for a in track["artists"]
-            ]:
-                spotify_link = track["external_urls"]["spotify"]
-                break
-        else:
-            raise IndexError(
-                "Wow, I can't believe I'm actually writing this statement... Sry"
-            )
-    except IndexError as e:
-        print("No spotify link found.")
+    spotify_link = get_spotify_track(name, artist)["external_urls"]["spotify"]
 
     print(original_name, original_artist)
 
@@ -192,6 +167,34 @@ def format_name(name):
         "".join(ch for ch in name if (ch.isalnum() or ch == " ")).lower()
     )
 
+
+def get_spotify_track(name, artist):
+    token = util.prompt_for_user_token(
+        username=USERNAME,
+        client_id=CLIENT_ID,
+        client_secret=CLIENT_SECRET,
+        scope="user-library-read",  # Apparent I have to provide a scope even if my script requires no user acess ... i think
+        redirect_uri=REDIRECT_URI,  # Apparently I have to provide a url to verify against my account ... i think
+    )
+    spotify = spotipy.Spotify(token)
+    results = spotify.search(q=("track:" + name + " artist:" + artist), type="track")
+
+    spotify_link = ""
+
+    try:
+        results = results["tracks"]["items"]
+        for track in results:
+            if format_name(track["name"]) == name and artist in [
+                format_name(a["name"]) for a in track["artists"]
+            ]:
+                break
+        else:
+            raise IndexError(
+                "Wow, I can't believe I'm actually writing this statement... Sry"
+            )
+    except IndexError as e:
+        print("No spotify link found.")
+    return track
 
 if __name__ == "__main__":
     main()
