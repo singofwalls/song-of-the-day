@@ -2,3 +2,6 @@
 *.code-workspace
 .vscode
 .mypy*
+.venv
+*__
+Pip*

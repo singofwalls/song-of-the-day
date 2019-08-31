@@ -10,20 +10,22 @@ import json
 import xml.etree.ElementTree as et
 import requests
 import unicodedata
+import string
+import re
 
 import spotipy
 import spotipy.util as util
 
+PLAYLIST = "Synced Bands"
+BOT_ID = "REDACTED"
+USERNAME = "REDACTED"
+CLIENT_ID = "REDACTED"
+CLIENT_SECRET = "REDACTED"
+REDIRECT_URI = "REDACTED"
+IMAGE = "REDACTED"
+
 
 def main():
-    PLAYLIST = "Synced Bands"
-    BOT_ID = "REDACTED"
-    USERNAME = "REDACTED"
-    CLIENT_ID = "REDACTED"
-    CLIENT_SECRET = "REDACTED"
-    REDIRECT_URI = "REDACTED"
-    IMAGE = "REDACTED"
-
     xml_path = os.environ["USERPROFILE"] + "/music/itunes/iTunes Music Library.xml"
 
     tree = et.parse(xml_path)
@@ -163,38 +165,62 @@ def remove_accents(input_str):
 
 
 def format_name(name):
-    return remove_accents(
-        "".join(ch for ch in name if (ch.isalnum() or ch == " ")).lower()
-    )
-
-
-def get_spotify_track(name, artist):
-    token = util.prompt_for_user_token(
-        username=USERNAME,
-        client_id=CLIENT_ID,
-        client_secret=CLIENT_SECRET,
-        scope="user-library-read",  # Apparent I have to provide a scope even if my script requires no user acess ... i think
-        redirect_uri=REDIRECT_URI,  # Apparently I have to provide a url to verify against my account ... i think
-    )
-    spotify = spotipy.Spotify(token)
-    results = spotify.search(q=("track:" + name + " artist:" + artist), type="track")
-
-    spotify_link = ""
-
+    """Format a name (track, artist, etc.) to be easily matchable."""
     try:
-        results = results["tracks"]["items"]
-        for track in results:
-            if format_name(track["name"]) == name and artist in [
-                format_name(a["name"]) for a in track["artists"]
-            ]:
-                break
-        else:
-            raise IndexError(
-                "Wow, I can't believe I'm actually writing this statement... Sry"
-            )
-    except IndexError as e:
-        print("No spotify link found.")
-    return track
+        name = name.encode("1252").decode("utf-8")
+    except UnicodeDecodeError:
+        pass
+    return remove_accents(
+        "".join(ch for ch in name if (ch.isalnum() or ch in " -:")).lower()
+    ).strip()
+
+def format_artist(artist):
+    """Return a list of artists from a single string with numerous artists in it."""
+    return list(filter(lambda x: bool(x), map(format_name, re.split("&|, | and ", artist))))
+
+
+def match_artist(target, artists):
+    arts = set()
+    for artist in map(lambda a: format_name(a["name"]), artists):
+        arts.update(format_artist(artist))
+    targets = set(format_artist(target))
+    matches = arts & targets
+    return bool(matches)
+
+
+def get_spotify_track(name, artist, token=None, spotify=None):
+    if isinstance(token, type(None)):
+        token = util.prompt_for_user_token(
+            username=USERNAME,
+            client_id=CLIENT_ID,
+            client_secret=CLIENT_SECRET,
+            scope="user-library-read,user-read-private",  # Apparent I have to provide a scope even if my script requires no user acess ... i think
+            redirect_uri=REDIRECT_URI,  # Apparently I have to provide a url to verify against my account ... i think
+        )
+    if isinstance(spotify, type(None)):
+        spotify = spotipy.Spotify(token)
+    q = (
+        "track:"
+        + format_name(name)
+        + " artist:"
+        + format_artist(artist)[-1]
+    )
+    results = spotify.search(q=q, type="track", market="from_token")
+
+    track_found = None
+
+    results = results["tracks"]["items"]
+    for track in results:
+        if format_name(track["name"]) == format_name(name) and match_artist(
+            artist, track["artists"]
+        ):
+            track_found = track
+            break
+    else:
+        if results:
+            track_found = results[0]
+    return track_found
+
 
 if __name__ == "__main__":
     main()
