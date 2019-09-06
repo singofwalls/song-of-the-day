@@ -2,6 +2,7 @@
 import json
 import random
 import urllib.parse
+import datetime
 
 import spotipy
 from spotipy import util
@@ -10,6 +11,7 @@ import requests
 
 CREDS_FILE = "creds.json"
 PAST_TRACKS_FILE = "past_tracks.json"
+TIMESTAMP_FORMAT = "%I O'CLOCK"
 
 
 def get_apple_link(search_terms):
@@ -49,15 +51,20 @@ def get_track_details(track):
     return details
 
 
-def send_track(track, g_creds):
+def send_track(track, spotify, g_creds, s_creds):
     """Send the chosen track to the groupme chat."""
 
     details = get_track_details(track)
+    playlist = spotify.user_playlist(s_creds["username"], s_creds["playlist"])
+    playlist_link = playlist["external_urls"]["spotify"]
+    now = datetime.datetime.now().strftime(TIMESTAMP_FORMAT)
 
     message = (
-        f"SONG OF THE DAY\n-------------------\n{details['name']}\n{details['artist']}"
-        f"\n{details['album']}"
+        f"THE TIME IS {now}\n\n"
+        f"SONG OF THE DAY\n-------------------\n{details['name']}\n"
+        f"artist: {details['artist']}\nalbum: {details['album']}"
         f"\n\nSpotify: {details['spotify link']}\nApple: {details['apple link']}"
+        f"\n\nPlaylist: {playlist_link}\nAddition Form: {s_creds['form_link']}"
     )
 
     post_params = {"bot_id": g_creds["bot_id"], "text": message}
@@ -136,7 +143,7 @@ def main():
         # TODO: Handle no more remaining
         return
 
-    send_track(chosen_track, g_creds)
+    send_track(chosen_track, spotify, g_creds, s_creds)
     record_chosen_track(chosen_track)
 
 
