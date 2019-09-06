@@ -10,6 +10,12 @@ import requests
 
 
 CREDS_FILE = "creds.json"
+# This JSON should have the following fields:
+# spotify:
+#   username, scopes, client_id, client_secret, redirect_uri, playlist, form_link
+# groupme:
+#   bot_id
+
 PAST_TRACKS_FILE = "past_tracks.json"
 TIMESTAMP_FORMAT = "%I O'CLOCK"
 
