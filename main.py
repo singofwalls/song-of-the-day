@@ -57,7 +57,7 @@ def get_track_details(track):
     return details
 
 
-def send_track(track, spotify, g_creds, s_creds):
+def send_track(track, spotify, g_creds, s_creds, reset):
     """Send the chosen track to the groupme chat."""
 
     details = get_track_details(track)
@@ -67,7 +67,8 @@ def send_track(track, spotify, g_creds, s_creds):
 
     message = (
         f"THE TIME IS {now}\n\n"
-        f"SONG OF THE DAY\n-------------------\n{details['name']}\n"
+        + ("TRACKS HAVE BEEN RESET.\n\n" if reset else "")
+        + f"SONG OF THE DAY\n-------------------\n{details['name']}\n"
         f"artist: {details['artist']}\nalbum: {details['album']}"
         f"\n\nSpotify: {details['spotify link']}\nApple: {details['apple link']}"
         f"\n\nPlaylist: {playlist_link}\nAddition Form: {s_creds['form_link']}"
@@ -138,7 +139,13 @@ def get_spotify(s_creds):
     return spotipy.Spotify(auth=token)
 
 
-def main():
+def reset_past():
+    """Reset the past tracks file."""
+    with open(PAST_TRACKS_FILE, "w") as f:
+        f.write(json.dumps([]))
+
+
+def main(reset=False):
     """Start the program."""
     s_creds, g_creds = get_credentials()
     spotify = get_spotify(s_creds)
@@ -146,10 +153,10 @@ def main():
     if remaining_tracks:
         chosen_track = random.choice(remaining_tracks)
     else:
-        # TODO: Handle no more remaining
-        return
+        reset_past()
+        return main(True)
 
-    send_track(chosen_track, spotify, g_creds, s_creds)
+    send_track(chosen_track, spotify, g_creds, s_creds, reset)
     record_chosen_track(chosen_track)
 
 
