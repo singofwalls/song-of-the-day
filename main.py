@@ -1,3 +1,4 @@
+#!/usr/bin/env python3.7
 """Choose random songs from a spotify playlist to dump in a groupme chat."""
 import json
 import random
