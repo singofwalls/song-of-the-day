@@ -1,13 +1,67 @@
 """Choose random songs from a spotify playlist to dump in a groupme chat."""
 import json
 import random
+import urllib.parse
 
 import spotipy
 from spotipy import util
+import requests
 
 
 CREDS_FILE = "creds.json"
 PAST_TRACKS_FILE = "past_tracks.json"
+
+
+def get_apple_link(search_terms):
+    """Get a link to the song from Apple based on artist, name, and album."""
+
+    query = " ".join(search_terms)
+    query = urllib.parse.quote_plus(query)
+    response = requests.get(f"https://itunes.apple.com/search?term={query}&limit=1")
+    if not response.ok or not response.content:
+        return ""
+
+    content = json.loads(response.content)
+    results = content["results"]
+    if not results:
+        return ""
+
+    url = results[0]["trackViewUrl"]
+    return url
+
+
+def get_track_details(track):
+    """Get the name, artist, and album, and links from the track dict."""
+    details = {}
+
+    artists = track["track"]["artists"]
+    details["artist"] = "Unknown"
+    if artists:
+        details["artist"] = artists[0]["name"]
+
+    details["name"] = track["track"]["name"]
+    details["album"] = track["track"]["album"]["name"]
+    details["apple link"] = get_apple_link(
+        (details["artist"], details["name"], details["album"])
+    )
+    details["spotify link"] = track["track"]["external_urls"]["spotify"]
+
+    return details
+
+
+def send_track(track, g_creds):
+    """Send the chosen track to the groupme chat."""
+
+    details = get_track_details(track)
+
+    message = (
+        f"SONG OF THE DAY\n-------------------\n{details['name']}\n{details['artist']}"
+        f"\n{details['album']}"
+        f"\n\nSpotify: {details['spotify link']}\nApple: {details['apple link']}"
+    )
+
+    post_params = {"bot_id": g_creds["bot_id"], "text": message}
+    requests.post("https://api.groupme.com/v3/bots/post", params=post_params)
 
 
 def record_chosen_track(track):
@@ -39,7 +93,9 @@ def get_remaining_tracks(spotify, s_creds):
     remaining_track_ids = all_track_ids - past_track_ids
 
     # Get track dicts from ids
-    remaining_tracks = [track for track in tracks if track["track"]["id"] in remaining_track_ids]
+    remaining_tracks = [
+        track for track in tracks if track["track"]["id"] in remaining_track_ids
+    ]
 
     return remaining_tracks
 
@@ -79,6 +135,8 @@ def main():
     else:
         # TODO: Handle no more remaining
         return
+
+    send_track(chosen_track, g_creds)
     record_chosen_track(chosen_track)
 
 
