@@ -15,7 +15,7 @@ CREDS_FILE = "creds.json"
 # spotify:
 #   username, scopes, client_id, client_secret, redirect_uri, playlist, form_link
 # groupme:
-#   bot_id
+#   bot_id, img_url
 
 PAST_TRACKS_FILE = "past_tracks.json"
 TIMESTAMP_FORMAT = "%I O'CLOCK"
@@ -75,7 +75,11 @@ def send_track(track, spotify, g_creds, s_creds, reset):
         f"\n\nPlaylist: {playlist_link}\nAddition Form: {s_creds['form_link']}"
     )
 
-    post_params = {"bot_id": g_creds["bot_id"], "text": message}
+    post_params = {
+        "bot_id": g_creds["bot_id"],
+        "text": message,
+        "picture_url": g_creds["img_url"]
+    }
     requests.post("https://api.groupme.com/v3/bots/post", params=post_params)
 
 
