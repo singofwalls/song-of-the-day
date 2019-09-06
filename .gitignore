@@ -5,5 +5,4 @@
 .venv
 *__
 Pip*
-creds.json
-past_tracks.json
+*.json
