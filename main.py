@@ -4,21 +4,24 @@ import json
 import random
 import urllib.parse
 import datetime
+import traceback
 
 import spotipy
 from spotipy import util
 import requests
 
-
 CREDS_FILE = "creds.json"
 # This JSON should have the following fields:
 # spotify:
-#   username, scopes, client_id, client_secret, redirect_uri, playlist, form_link
+#   username, scopes, client_id, client_secret, redirect_uri, playlist,
+#   form_link
 # groupme:
 #   bot_id, img_url
 
 PAST_TRACKS_FILE = "past_tracks.json"
 TIMESTAMP_FORMAT = "%I O'CLOCK"
+LOG_FILE = "log.txt"
+LOG_TIMESTAMP = "%b %d, %Y %I:%M:%S %p"
 
 
 def get_apple_link(search_terms):
@@ -26,7 +29,8 @@ def get_apple_link(search_terms):
 
     query = " ".join(search_terms)
     query = urllib.parse.quote_plus(query)
-    response = requests.get(f"https://itunes.apple.com/search?term={query}&limit=1")
+    response = requests.get(
+        f"https://itunes.apple.com/search?term={query}&limit=1")
     if not response.ok or not response.content:
         return ""
 
@@ -51,8 +55,7 @@ def get_track_details(track):
     details["name"] = track["track"]["name"]
     details["album"] = track["track"]["album"]["name"]
     details["apple link"] = get_apple_link(
-        (details["artist"], details["name"], details["album"])
-    )
+        (details["artist"], details["name"], details["album"]))
     details["spotify link"] = track["track"]["external_urls"]["spotify"]
 
     return details
@@ -67,19 +70,15 @@ def send_track(track, spotify, g_creds, s_creds, reset):
     now = datetime.datetime.now().strftime(TIMESTAMP_FORMAT)
 
     message = (
-        f"THE TIME IS {now}\n\n"
-        + ("TRACKS HAVE BEEN RESET.\n\n" if reset else "")
-        + f"SONG OF THE DAY\n-------------------\n{details['name']}\n"
-        f"artist: {details['artist']}\nalbum: {details['album']}"
-        f"\n\nSpotify: {details['spotify link']}\nApple: {details['apple link']}"
-        f"\n\nPlaylist: {playlist_link}\nAddition Form: {s_creds['form_link']}"
+            f"THE TIME IS {now}\n\n"
+            + ("TRACKS HAVE BEEN RESET.\n\n" if reset else "")
+            + f"SONG OF THE DAY\n-------------------\n{details['name']}\n"
+              f"artist: {details['artist']}\nalbum: {details['album']}"
+              f"\n\nSpotify: {details['spotify link']}\nApple: {details['apple link']}"
+              f"\n\nPlaylist: {playlist_link}\nAddition Form: {s_creds['form_link']}"
     )
-
-    post_params = {
-        "bot_id": g_creds["bot_id"],
-        "text": message,
-        "picture_url": g_creds["img_url"]
-    }
+    post_params = {"bot_id": g_creds["bot_id"], "text": message,
+                   "picture_url": g_creds["img_url"]}
     requests.post("https://api.groupme.com/v3/bots/post", params=post_params)
 
 
@@ -105,16 +104,16 @@ def load_past_tracks():
 
 def get_remaining_tracks(spotify, s_creds):
     """Get the tracks from the spotify playlist which have not been used."""
-    results = spotify.user_playlist_tracks(s_creds["username"], s_creds["playlist"])
+    results = spotify.user_playlist_tracks(s_creds["username"],
+                                           s_creds["playlist"])
     tracks = results["items"]
     all_track_ids = set([track["track"]["id"] for track in tracks])
     past_track_ids = set(load_past_tracks())
     remaining_track_ids = all_track_ids - past_track_ids
 
     # Get track dicts from ids
-    remaining_tracks = [
-        track for track in tracks if track["track"]["id"] in remaining_track_ids
-    ]
+    remaining_tracks = [track for track in tracks if
+                        track["track"]["id"] in remaining_track_ids]
 
     return remaining_tracks
 
@@ -133,13 +132,10 @@ def get_credentials():
 def get_spotify(s_creds):
     """Get the spotify object from which to make requests."""
     # Authorize Spotify
-    token = util.prompt_for_user_token(
-        s_creds["username"],
-        s_creds["scopes"],
-        s_creds["client_id"],
-        s_creds["client_secret"],
-        s_creds["redirect_uri"],
-    )
+    token = util.prompt_for_user_token(s_creds["username"], s_creds["scopes"],
+                                       s_creds["client_id"],
+                                       s_creds["client_secret"],
+                                       s_creds["redirect_uri"], )
 
     return spotipy.Spotify(auth=token)
 
@@ -165,5 +161,18 @@ def main(reset=False):
     record_chosen_track(chosen_track)
 
 
+def log(message):
+    """Log to the log file."""
+    with open(LOG_FILE, "a") as log:
+        log.write(datetime.datetime.now().strftime(
+            LOG_TIMESTAMP) + " " + message + "\n")
+
+
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        tb = traceback.format_exception(etype=type(e), value=e,
+                                        tb=e.__traceback__)
+        log("ERROR\n" + "".join(tb))
+        raise e
